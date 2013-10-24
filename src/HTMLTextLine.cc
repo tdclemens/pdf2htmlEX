@@ -31,7 +31,8 @@ HTMLTextLine::HTMLTextLine (const HTMLLineState & line_state, const Param & para
     ,line_state(line_state)
     ,clip_x1(0)
     ,clip_y1(0)
-{ }
+{ 
+}
 
 void HTMLTextLine::append_unicodes(const Unicode * u, int l)
 {
@@ -66,12 +67,43 @@ void HTMLTextLine::append_state(const HTMLTextState & text_state)
     last_state.font_size *= last_state.font_info->font_size_scale;
 }
 
+void HTMLTextLine::append_letter_state(char c, double dx1, double dy1, double font_size, double text_scale, double letter_spacing, double word_space, double add_offset, double y)
+{
+    letterStates.emplace_back();
+    letterStates.back().c = c;
+    letterStates.back().dx1 = dx1;
+    letterStates.back().dy1 = dy1;
+    letterStates.back().font_size = font_size;
+    letterStates.back().text_scale = text_scale;
+    letterStates.back().letter_spacing = letter_spacing;
+    letterStates.back().word_space = word_space;
+    letterStates.back().add_offset = add_offset;
+    letterStates.back().y = y;
+}
+
 void HTMLTextLine::dump_text(ostream & out)
 {
     /*
      * Each Line is an independent absolute positioned block
      * so even we have a few states or offsets, we may omit them
      */
+
+    //Added by Tyler Clemens. Calculates the average space between characters
+    all_spaces = 0;
+
+    std::vector<LetterState>::iterator currentLetter;
+    std::vector<LetterState>::iterator nextLetter;
+    double prev_dc, dc;
+    double sum = 0;
+    int length = 0;
+    prev_dc = 0;
+    for(currentLetter = letterStates.begin(),nextLetter = currentLetter + 1; nextLetter < letterStates.end(); currentLetter++, nextLetter++){
+        dc = nextLetter->add_offset - currentLetter->add_offset - currentLetter->dx1;
+        sum += dc;
+        length++;
+    }
+    avg_char_space = sum / length;
+
     if(text.empty())
         return;
 
@@ -106,6 +138,10 @@ void HTMLTextLine::dump_text(ostream & out)
     size_t cur_text_idx = 0;
 
     auto cur_offset_iter = offsets.begin();
+    cur_letter_pos = letterStates.begin();
+    bool stateChange = false;
+    double stateX = 0;
+
     for(auto state_iter2 = states.begin(), state_iter1 = state_iter2++; 
             state_iter1 != states.end(); 
             ++state_iter1, ++state_iter2)
@@ -153,6 +189,7 @@ void HTMLTextLine::dump_text(ostream & out)
         size_t text_idx2 = (state_iter2 == states.end()) ? text.size() : state_iter2->start_idx;
 
         // dump all text and offsets before next state
+        std::vector<LetterState>::iterator state_txt_iter = cur_letter_pos;
         while(true)
         {
             if((cur_offset_iter != offsets.end()) 
@@ -172,20 +209,6 @@ void HTMLTextLine::dump_text(ostream & out)
                 else
                 {
                     bool done = false;
-                    // check if the offset is equivalent to a single ' '
-                    if(!(state_iter1->hash_umask & State::umask_by_id(State::WORD_SPACE_ID)))
-                    {
-                        double space_off = state_iter1->single_space_offset();
-                        if(abs(target - space_off) <= param.h_eps)
-                        {
-                            Unicode u = ' ';
-                            outputUnicodes(out, &u, 1);
-                            actual_offset = space_off;
-                            done = true;
-                        }
-                    }
-
-                    // finally, just dump it
                     if(!done)
                     {
                         long long wid = all_manager.whitespace.install(target, &actual_offset);
@@ -196,14 +219,14 @@ void HTMLTextLine::dump_text(ostream & out)
                                 last_text_pos_with_negative_offset = cur_text_idx;
 
                             double threshold = state_iter1->em_size() * (param.space_threshold);
-
-                            out << "<span class=\"" << CSS::WHITESPACE_CN
-                                << ' ' << CSS::WHITESPACE_CN << wid << "\">" << (target > (threshold - EPS) ? " " : "") << "</span>";
                         }
                     }
+                    
                 }
                 dx = target - actual_offset;
                 ++ cur_offset_iter;
+                state_txt_iter++;
+
             }
             else
             {
@@ -211,10 +234,12 @@ void HTMLTextLine::dump_text(ostream & out)
                     break;
                 // next is text
                 size_t next_text_idx = text_idx2;
-                if((cur_offset_iter != offsets.end()) && (cur_offset_iter->start_idx) < next_text_idx)
-                    next_text_idx = cur_offset_iter->start_idx;
-                outputUnicodes(out, (&text.front()) + cur_text_idx, next_text_idx - cur_text_idx);
+                //if((cur_offset_iter != offsets.end()) && (cur_offset_iter->start_idx) < next_text_idx)
+                //    next_text_idx = cur_offset_iter->start_idx;
+                //Added by Tyler Clemens. for now just do this:
+                outputWords(out, (&text.front()) + cur_text_idx, next_text_idx - cur_text_idx, state_iter1, cur_text_idx);
                 cur_text_idx = next_text_idx;
+                state_txt_iter = cur_letter_pos;
             }
         }
     }
@@ -225,8 +250,57 @@ void HTMLTextLine::dump_text(ostream & out)
         stack.back()->end(out);
         stack.pop_back();
     }
-
+    out << " </span>";
     out << "</div>";
+}
+
+void HTMLTextLine::outputWords(std::ostream & out, const Unicode * u, int uLen, std::vector<State>::iterator state1, int cur_text_idx)
+{
+    //add up all the offsets
+    double result, y;
+    calculateWordPos(cur_letter_pos, result, y);
+    if (state1->start_idx == cur_text_idx){
+        out << "<span style='position:absolute;left:"<<result<<"px;bottom:"<<y<<";'>";
+        begin_word_pos = cur_letter_pos;
+    }
+    for(int i = 0; i < uLen; ++i, cur_letter_pos++)
+    {
+        if(u[i] == ' '){
+            result = 0.0;
+            calculateWordPos(cur_letter_pos + 1, result, y);
+            if((state1+1)->start_idx != cur_text_idx + i + 1){
+                out << " </span><span style='position:absolute;left:"<<result<<"px;bottom:"<<y<<";'>";
+                begin_word_pos = cur_letter_pos;
+            }
+            //else
+            //    out << " ";
+            continue;
+        }
+        if(checkForSpace(cur_letter_pos)){
+            double x, y;
+            calculateWordPos(cur_letter_pos, x, y);
+            out << " </span><span style='position:absolute;left:"<<x<<"px;bottom:"<<y<<";'>";
+            begin_word_pos = cur_letter_pos;
+        }
+        outputUnicodes(out, &(u[i]), 1);
+    }
+    if((state1+1)->start_idx == cur_text_idx + uLen)
+        out << " </span>";
+    
+    return;
+}
+
+void HTMLTextLine::calculateWordPos(std::vector<LetterState>::iterator letters, double &x, double &y){
+    x = 0;y = 0;
+    for(std::vector<LetterState>::iterator itr = letters; itr != letterStates.begin(); itr--){
+        x += (itr->add_offset - (itr - 1)->add_offset) * itr->text_scale;
+    }
+}
+
+bool HTMLTextLine::checkForSpace(std::vector<LetterState>::iterator letters){
+    double rhs = (letters->add_offset - (letters - 1)->add_offset - (letters-1)->dx1);//*(letters-1)->font_size) * letters->text_scale; 
+    bool retValue = fabs(avg_char_space) * 1.5 < rhs;
+    return retValue;
 }
 
 void HTMLTextLine::clear(void)
@@ -504,7 +578,7 @@ void HTMLTextLine::State::begin (ostream & out, const State * prev_state)
             // so we have to dump it
             if(first)
             { 
-                out << "<span class=\"";
+                out << "<span style='position:absolute;bottom:0px;line-height:inherit;' class=\"";
                 first = false;
             }
             else
@@ -525,7 +599,7 @@ void HTMLTextLine::State::begin (ostream & out, const State * prev_state)
             // so we have to dump it
             if(first)
             { 
-                out << "<span class=\"";
+                out << "<span style='position:absolute;bottom:0px;line-height:inherit;' class=\"";
                 first = false;
             }
             else

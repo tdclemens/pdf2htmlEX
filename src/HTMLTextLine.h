@@ -29,6 +29,18 @@ class HTMLTextLine
 public:
     HTMLTextLine (const HTMLLineState & line_state, const Param & param, AllStateManager & all_manager);
 
+    //Added by Tyler Clemens. A collection of coordinates
+    struct LetterState {
+        char c;
+        double dx1, dy1;
+        double font_size;
+        double text_scale;
+        double letter_spacing;
+        double word_space;
+        double add_offset;
+        double y;
+    };
+
     struct State : public HTMLTextState {
         // before output
         void begin(std::ostream & out, const State * prev_state);
@@ -76,6 +88,10 @@ public:
     void append_unicodes(const Unicode * u, int l);
     void append_offset(double width);
     void append_state(const HTMLTextState & text_state);
+
+    // Added by Tyler Clemens. A method for appending to LetterPositions
+    void append_letter_state(char c, double dx1, double dy1, double font_size, double text_scale, double letter_spacing, double word_space, double add_offset, double y);
+    
     void dump_text(std::ostream & out);
 
     bool text_empty(void) const { return text.empty(); }
@@ -90,6 +106,11 @@ public:
 private:
     void optimize(void);
 
+    //Added by Tyler Clemens. A quick and dirty way to output words when given a string of characters
+    void outputWords(std::ostream & out, const Unicode * u, int uLen, std::vector<State>::iterator state1, int cur_text_idx);
+    void calculateWordPos(std::vector<LetterState>::iterator, double &x, double &y);
+    bool checkForSpace(std::vector<LetterState>::iterator letters);
+
     const Param & param;
     AllStateManager & all_manager;
 
@@ -100,6 +121,13 @@ private:
     std::vector<State> states;
     std::vector<Offset> offsets;
     std::vector<Unicode> text;
+
+    //Added by Tyler Clemens. Stores the positions of each character
+    std::vector<LetterState> letterStates;
+    std::vector<LetterState>::iterator cur_letter_pos;
+    std::vector<LetterState>::iterator begin_word_pos;
+    double all_spaces;
+    double avg_char_space;
 };
 
 } // namespace pdf2htmlEX
