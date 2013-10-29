@@ -34,6 +34,11 @@ HTMLTextLine::HTMLTextLine (const HTMLLineState & line_state, const Param & para
 { 
 }
 
+HTMLTextLine::~HTMLTextLine(){
+   for(std::list<LetterState>::iterator itr = letters.begin(); itr != letters.end(); itr++)
+        delete[] itr->letter;
+}
+
 void HTMLTextLine::append_unicodes(const Unicode * u, int l)
 {
     text.insert(text.end(), u, u+l);
@@ -67,47 +72,87 @@ void HTMLTextLine::append_state(const HTMLTextState & text_state)
     last_state.font_size *= last_state.font_info->font_size_scale;
 }
 
-void HTMLTextLine::append_letter_state(char c, double dx1, double dy1, double font_size, double text_scale, double letter_spacing, double word_space, double add_offset, double y)
+
+void HTMLTextLine::append_letter_state(Unicode *letter, int uLen, double x, double y, double dx, double dy, int index, double fs, double dts) 
 {
-    letterStates.emplace_back();
-    letterStates.back().c = c;
-    letterStates.back().dx1 = dx1;
-    letterStates.back().dy1 = dy1;
-    letterStates.back().font_size = font_size;
-    letterStates.back().text_scale = text_scale;
-    letterStates.back().letter_spacing = letter_spacing;
-    letterStates.back().word_space = word_space;
-    letterStates.back().add_offset = add_offset;
-    letterStates.back().y = y;
+    letters.emplace_back();
+    letters.back().letter = new Unicode[uLen];
+    for(int i = 0; i < uLen; i++)
+        (letters.back().letter)[i] = letter[i];
+    letters.back().length = uLen;
+    letters.back().x = x;
+    letters.back().dx = dx;
+    letters.back().dy = dy;
+    letters.back().index = index;
+    letters.back().fs = fs;
+    letters.back().dts = dts;
 }
 
-void HTMLTextLine::dump_text(ostream & out)
-{
-    /*
-     * Each Line is an independent absolute positioned block
-     * so even we have a few states or offsets, we may omit them
-     */
 
-    //Added by Tyler Clemens. Calculates the average space between characters
-    all_spaces = 0;
+void HTMLTextLine::dump_text(ostream & out){
 
-    std::vector<LetterState>::iterator currentLetter;
-    std::vector<LetterState>::iterator nextLetter;
-    double prev_dc, dc;
-    double sum = 0;
-    int length = 0;
-    prev_dc = 0;
-    for(currentLetter = letterStates.begin(),nextLetter = currentLetter + 1; nextLetter < letterStates.end(); currentLetter++, nextLetter++){
-        dc = nextLetter->add_offset - currentLetter->add_offset - currentLetter->dx1;
-        sum += dc;
-        length++;
+    //std::ostream &out = std::cout;
+
+    //set the values of x for all letters
+    {
+      std::list<LetterState>::iterator cur_letter, next_letter;
+      double prevx = letters.begin()->x;
+//      if(prevx < 0)
+//          printf("prevx: %f\n", prevx);
+      letters.begin()->x = letters.begin()->x * letters.begin()->dts;
+      cur_letter = letters.begin();
+      next_letter = letters.begin();
+      next_letter++;
+      for(; next_letter != letters.end(); cur_letter++, next_letter++){
+          double x  = (next_letter->x - prevx) * cur_letter->dts;
+          prevx = next_letter->x;
+          next_letter->x = cur_letter->x + x;
+//          if(next_letter->x < 0)
+//              printf("%f\n", next_letter->x);
+      }
+      /*
+              std::list<LetterState>::iterator cur_letter, next_letter, unscaled_cur, unscaled_next;
+              cur_letter = next_letter = letters.begin();
+          if(letters.size() > 0)
+              cur_letter->x = cur_letter->x * cur_letter->dts;
+          if(letters.size() > 1){
+              std::list<LetterState> unscaledLetters;
+              std::copy(letters.begin(), letters.end(), unscaledLetters.begin());
+              printf("after copy\n");
+              unscaled_cur = unscaled_next = unscaledLetters.begin();
+              next_letter++;
+              unscaled_next++;
+              for(; next_letter != letters.end(); cur_letter++, next_letter++){
+                  next_letter->x = (unscaled_next->x - unscaled_cur->x) * unscaled_cur->dts;
+                  if(next_letter->x < 0)
+                      printf("%f\n",next_letter->x);
+              }
+         }
+         */
+      //set the first state on the line to have the right x coordinate
+      states.front().x = states.front().letters.front()->x;
+      //loop through each state
+      for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++){
+          //set values for each state
+          cur_state->dts = cur_state->letters.front()->dts;
+          cur_state->x = cur_state->letters.front()->x;
+          //gather the characters into words based on space
+          make_words(cur_state);
+      }
     }
-    avg_char_space = sum / length;
 
-    if(text.empty())
-        return;
+    //set the most common character space of each state
+    for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++)
+        cur_state->set_mcu_cs();
 
-    if(states.empty() || (states[0].start_idx != 0))
+    //for each state, try to guess where there is a space and insert new words
+    std::list<WordState>::iterator cur_word;
+    for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++){
+            cur_state->detect_spaces_and_split(cur_state->words.begin(),cur_state->words.begin());
+    }
+    
+    // do some of the original stuff
+    if(states.empty() || (states.front().start_idx != 0))
     {
         cerr << "Warning: text without a style! Must be a bug in pdf2htmlEX" << endl;
         return;
@@ -124,183 +169,106 @@ void HTMLTextLine::dump_text(ostream & out)
             ;
         // it will be closed by the first state
     }
-
-    std::vector<State*> stack;
-    // a special safeguard in the bottom
-    stack.push_back(nullptr);
-
-    //accumulated horizontal offset;
-    double dx = 0;
-
-    // whenever a negative offset appears, we should not pop out that <span>
-    // otherwise the effect of negative margin-left would disappear
-    size_t last_text_pos_with_negative_offset = 0;
-    size_t cur_text_idx = 0;
-
-    auto cur_offset_iter = offsets.begin();
-    cur_letter_pos = letterStates.begin();
-    bool stateChange = false;
-    double stateX = 0;
-
-    for(auto state_iter2 = states.begin(), state_iter1 = state_iter2++; 
-            state_iter1 != states.end(); 
-            ++state_iter1, ++state_iter2)
-    {
-        // export current state, find a closest parent
-        { 
-            // greedy
-            double vertical_align = state_iter1->vertical_align;
-            int best_cost = State::HASH_ID_COUNT + 1;
-            // we have a nullptr at the beginning, so no need to check for rend
-            for(auto iter = stack.rbegin(); *iter; ++iter)
-            {
-                int cost = state_iter1->diff(**iter);
-                if(!equal(vertical_align,0))
-                    ++cost;
-
-                if(cost < best_cost)
-                {
-                    while(stack.back() != *iter)
-                    {
-                        stack.back()->end(out);
-                        stack.pop_back();
-                    }
-                    best_cost = cost;
-                    state_iter1->vertical_align = vertical_align;
-
-                    if(best_cost == 0)
-                        break;
-                }
-
-                // cannot go further
-                if((*iter)->start_idx <= last_text_pos_with_negative_offset)
-                    break;
-
-                vertical_align += (*iter)->vertical_align;
-            }
-            // 
-            state_iter1->ids[State::VERTICAL_ALIGN_ID] = all_manager.vertical_align.install(state_iter1->vertical_align);
-            // export the diff between *state_iter1 and stack.back()
-            state_iter1->begin(out, stack.back());
-            stack.push_back(&*state_iter1);
-        }
-
-        // [state_iter1->start_idx, text_idx2) are covered by the current state
-        size_t text_idx2 = (state_iter2 == states.end()) ? text.size() : state_iter2->start_idx;
-
-        // dump all text and offsets before next state
-        std::vector<LetterState>::iterator state_txt_iter = cur_letter_pos;
-        while(true)
-        {
-            if((cur_offset_iter != offsets.end()) 
-                    && (cur_offset_iter->start_idx <= cur_text_idx))
-            {
-                if(cur_offset_iter->start_idx > text_idx2)
-                    break;
-                // next is offset
-                double target = cur_offset_iter->width + dx;
-                double actual_offset = 0;
-
-                //ignore near-zero offsets
-                if(abs(target) <= param.h_eps)
-                {
-                    actual_offset = 0;
-                }
-                else
-                {
-                    bool done = false;
-                    if(!done)
-                    {
-                        long long wid = all_manager.whitespace.install(target, &actual_offset);
-
-                        if(!equal(actual_offset, 0))
-                        {
-                            if(is_positive(-actual_offset))
-                                last_text_pos_with_negative_offset = cur_text_idx;
-
-                            double threshold = state_iter1->em_size() * (param.space_threshold);
-                        }
-                    }
-                    
-                }
-                dx = target - actual_offset;
-                ++ cur_offset_iter;
-                state_txt_iter++;
-
-            }
-            else
-            {
-                if(cur_text_idx >= text_idx2)
-                    break;
-                // next is text
-                size_t next_text_idx = text_idx2;
-                //if((cur_offset_iter != offsets.end()) && (cur_offset_iter->start_idx) < next_text_idx)
-                //    next_text_idx = cur_offset_iter->start_idx;
-                //Added by Tyler Clemens. for now just do this:
-                outputWords(out, (&text.front()) + cur_text_idx, next_text_idx - cur_text_idx, state_iter1, cur_text_idx);
-                cur_text_idx = next_text_idx;
-                state_txt_iter = cur_letter_pos;
-            }
-        }
+    State * prev_state = nullptr;
+    for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++){
+        cur_state->begin(out, prev_state);
+        for(std::list<WordState>::iterator words = cur_state->words.begin(); words != cur_state->words.end(); words++)
+            words->print(out);
+        cur_state->end(out);
+        prev_state = &(*cur_state);
     }
 
-    // we have a nullptr in the bottom
-    while(stack.back())
-    {
-        stack.back()->end(out);
-        stack.pop_back();
-    }
-    out << " </span>";
     out << "</div>";
+
 }
 
-void HTMLTextLine::outputWords(std::ostream & out, const Unicode * u, int uLen, std::vector<State>::iterator state1, int cur_text_idx)
-{
-    //add up all the offsets
-    double result, y;
-    calculateWordPos(cur_letter_pos, result, y);
-    if (state1->start_idx == cur_text_idx){
-        out << "<span style='position:absolute;left:"<<result<<"px;bottom:"<<y<<";'>";
-        begin_word_pos = cur_letter_pos;
+void HTMLTextLine::make_words(std::list<State>::iterator cur_state){
+    //loop through each character in the state and make a word if the current character is a space.
+    cur_state->words.emplace_back();
+    cur_state->words.back().x = cur_state->letters.front()->x;
+    std::list<LetterState*>::iterator copy;
+    for(std::list<LetterState*>::iterator cur_letter = cur_state->letters.begin(); cur_letter != cur_state->letters.end(); cur_letter++){
+        cur_state->words.back().letters.push_back(*cur_letter);
+        //search the letter string for a space
+        bool found = false;
+        for(int i = 0; i < (*cur_letter)->length; i++)
+            //if(((*cur_letter)->letter)[i] == ' ')
+            if(((*cur_letter)->letter)[i] == ' ' || ((*cur_letter)->letter)[i] == ',' || ((*cur_letter)->letter)[i] == '.' || ((*cur_letter)->letter)[i] == ';' || ((*cur_letter)->letter)[i] == ':')
+                found = true;
+        //if you find a space create a new word
+        if(found){
+            copy = cur_letter;
+            copy++;
+            cur_state->words.emplace_back();
+            if(copy != cur_state->letters.end())
+                cur_state->words.back().x = (*copy)->x;
+            else
+                cur_state->words.back().x = (*cur_letter)->x;
+        }
     }
-    for(int i = 0; i < uLen; ++i, cur_letter_pos++)
-    {
-        if(u[i] == ' '){
-            result = 0.0;
-            calculateWordPos(cur_letter_pos + 1, result, y);
-            if((state1+1)->start_idx != cur_text_idx + i + 1){
-                out << " </span><span style='position:absolute;left:"<<result<<"px;bottom:"<<y<<";'>";
-                begin_word_pos = cur_letter_pos;
+}
+
+void HTMLTextLine::State::set_mcu_cs(){
+    std::list<LetterState*>::iterator cur_letter, next_letter;
+    std::list<LetterState*>::iterator endItr;
+    for(std::list<WordState>::iterator cur_word = words.begin(); cur_word != words.end(); cur_word++){
+        endItr = cur_word->letters.end();
+        endItr--;
+        //TODO: change this algorithm to a more efficient one. This is a brute force method
+        if(cur_word->letters.size() > 1)
+        for(cur_letter = cur_word->letters.begin(),next_letter = cur_letter,next_letter++; next_letter != endItr; cur_letter++, next_letter++){
+            double cs = (*next_letter)->x - (*cur_letter)->x - ((*cur_letter)->dx * (*cur_letter)->dts);
+            if(cs > 0){
+                if((cses).find(cs) == cses.end()){
+                    cses[cs] = 1;
+                }
+                else{
+                    cses[cs] = cses[cs] + 1;
+                }
             }
-            //else
-            //    out << " ";
-            continue;
         }
-        if(checkForSpace(cur_letter_pos)){
-            double x, y;
-            calculateWordPos(cur_letter_pos, x, y);
-            out << " </span><span style='position:absolute;left:"<<x<<"px;bottom:"<<y<<";'>";
-            begin_word_pos = cur_letter_pos;
-        }
-        outputUnicodes(out, &(u[i]), 1);
     }
-    if((state1+1)->start_idx == cur_text_idx + uLen)
-        out << " </span>";
-    
-    return;
+    mcu_cs = 0;
+    for(std::map<double,int>::iterator itr = cses.begin(); itr != cses.end(); itr++){
+        if(mcu_cs < itr->first)
+            mcu_cs = itr->first;
+    }
+    //printf("state mcu_cs: %f\n", mcu_cs);
+
 }
 
-void HTMLTextLine::calculateWordPos(std::vector<LetterState>::iterator letters, double &x, double &y){
-    x = 0;y = 0;
-    for(std::vector<LetterState>::iterator itr = letters; itr != letterStates.begin(); itr--){
-        x += (itr->add_offset - (itr - 1)->add_offset) * itr->text_scale;
-    }
-}
+std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word){
+    if(word == words.end())
+        return word;
+    // end case for recursion
+    std::ostream &out = std::cout;
 
-bool HTMLTextLine::checkForSpace(std::vector<LetterState>::iterator letters){
-    double rhs = (letters->add_offset - (letters - 1)->add_offset - (letters-1)->dx1);//*(letters-1)->font_size) * letters->text_scale; 
-    bool retValue = fabs(avg_char_space) * 1.5 < rhs;
-    return retValue;
+    std::list<LetterState*>::iterator cur_letter, next_letter;
+    std::list<WordState>::iterator copy = word;
+    copy++;
+    WordState newWord;
+    bool inserted = false;
+    if(word->letters.size() > 1){
+        for(cur_letter = word->letters.begin(),next_letter = cur_letter, next_letter++; next_letter != word->letters.end(); cur_letter++, next_letter++){
+            double cs = (*next_letter)->x - (*cur_letter)->x - ((*cur_letter)->dx * (*cur_letter)->dts);
+            if(cs * dts >= single_space_offset()){
+                //set the x value for the word
+                newWord.x = (*next_letter)->x;
+                //copy the rest of the characters over to the new word and delete them
+                for(std::list<LetterState*>::iterator itr = next_letter; itr != word->letters.end(); itr++)
+                    newWord.letters.push_back(*itr);
+                word->letters.erase(next_letter, word->letters.end());
+                //insert the new word before the next word
+                words.insert(copy, newWord);
+                break;
+            }
+        }
+        copy = word;
+        copy++;
+        return detect_spaces_and_split(beginWord, copy);
+    }
+    else
+      return word;
 }
 
 void HTMLTextLine::clear(void)
@@ -692,6 +660,22 @@ int HTMLTextLine::State::diff(const State & s) const
 long long HTMLTextLine::State::umask_by_id(int id)
 {
     return (((long long)0xff) << (8*id));
+}
+
+//print the word with its beginning and ending span
+void HTMLTextLine::WordState::print(std::ostream &out){
+  std::list<LetterState*>::iterator backItr = letters.end();
+  backItr--;
+  out << "<span style='position:absolute;bottom:0px;left:"<<x<<"px;letter-spacing:0px;'>";
+  for(std::list<LetterState*>::iterator itr = letters.begin(); itr != letters.end(); itr++){
+      for(int i = 0; i < (*itr)->length; i++){
+          outputUnicodes(out, &(((*itr)->letter)[i]), 1);
+          //insert a space at the end of the word if its not there
+          if(itr == backItr &&  i == (*itr)->length - 1 && ((*itr)->letter)[i] != ' ')
+              out << ' ';
+      }
+  }
+  out << "</span>";
 }
 
 // the order should be the same as in the enum

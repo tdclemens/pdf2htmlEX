@@ -7,6 +7,7 @@
 
 #include <ostream>
 #include <vector>
+#include <list>
 
 #include <CharTypes.h>
 
@@ -27,19 +28,29 @@ namespace pdf2htmlEX {
 class HTMLTextLine
 {
 public:
-    HTMLTextLine (const HTMLLineState & line_state, const Param & param, AllStateManager & all_manager);
-
-    //Added by Tyler Clemens. A collection of coordinates
+    //Added by Tyler Clemens.
     struct LetterState {
-        char c;
-        double dx1, dy1;
-        double font_size;
-        double text_scale;
-        double letter_spacing;
-        double word_space;
-        double add_offset;
-        double y;
+        Unicode *letter;  //the characters
+        int length;       //the length of the characters
+        double x, y;      //character position
+        double dx, dy;    //character width and height
+        int index;        //the index of the character on its line
+        double fs;        //Font Size
+        double dts;       //Draw Text Scale
     };
+
+    //Added by Tyler Clemens
+    struct WordState {
+        std::list<LetterState*> letters;
+        double avgls;                       // average letter space >= 0. round negative values up to 0.
+        double x, y;                        // the coordinates of the word
+        double mcu_cs;                      // the most commonly used space between characters. Exclude negatives and 0
+
+        void print(std::ostream &out);
+    };
+
+    HTMLTextLine (const HTMLLineState & line_state, const Param & param, AllStateManager & all_manager);
+    ~HTMLTextLine();
 
     struct State : public HTMLTextState {
         // before output
@@ -50,6 +61,13 @@ public:
         void hash(void);
         // calculate the difference between another State
         int diff(const State & s) const;
+
+        //Added by Tyler Clemens.
+        void append_letter_state(LetterState *letter){
+            letters.push_back(letter);
+        }
+        void set_mcu_cs();
+        std::list<WordState>::iterator detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word);
 
         enum {
             FONT_ID,
@@ -75,6 +93,16 @@ public:
         bool need_close;
 
         static const char * const css_class_names []; // class names for each id
+
+        //Added by Tyler Clemens. A vector of letter states
+        std::list<LetterState*> letters;
+        //Added by Tyler Clemens. A vector of words
+        std::list<WordState> words;
+        double x, y;
+        double dts;
+        std::map<double, int> cses;
+        double mcu_cs;                  // most commonly used letter space
+    
     };
 
     struct Offset {
@@ -90,7 +118,8 @@ public:
     void append_state(const HTMLTextState & text_state);
 
     // Added by Tyler Clemens. A method for appending to LetterPositions
-    void append_letter_state(char c, double dx1, double dy1, double font_size, double text_scale, double letter_spacing, double word_space, double add_offset, double y);
+    void append_letter_state(Unicode *letter, int uLen, double x, double y, double dx, double dy, int index, double fs, double dts); 
+    void make_words(std::list<State>::iterator cur_state);
     
     void dump_text(std::ostream & out);
 
@@ -103,11 +132,13 @@ public:
      * Optimize and calculate necessary values
      */
     void prepare(void);
+    std::list<State> states;
+    std::list<LetterState> letters;
 private:
     void optimize(void);
 
     //Added by Tyler Clemens. A quick and dirty way to output words when given a string of characters
-    void outputWords(std::ostream & out, const Unicode * u, int uLen, std::vector<State>::iterator state1, int cur_text_idx);
+    void outputWords(std::ostream & out, const Unicode * u, int uLen, std::list<State>::iterator state1, int cur_text_idx);
     void calculateWordPos(std::vector<LetterState>::iterator, double &x, double &y);
     bool checkForSpace(std::vector<LetterState>::iterator letters);
 
@@ -118,16 +149,14 @@ private:
     double ascent, descent;
     double clip_x1, clip_y1;
 
-    std::vector<State> states;
     std::vector<Offset> offsets;
     std::vector<Unicode> text;
 
-    //Added by Tyler Clemens. Stores the positions of each character
-    std::vector<LetterState> letterStates;
-    std::vector<LetterState>::iterator cur_letter_pos;
-    std::vector<LetterState>::iterator begin_word_pos;
+    //Added by Tyler Clemens.
     double all_spaces;
     double avg_char_space;
+    std::list<State>::iterator cur_state_itr;
+    double x, y; // the x and y position of the state on the line
 };
 
 } // namespace pdf2htmlEX

@@ -33,9 +33,9 @@ void HTMLRenderer::updateTextPos(GfxState * state)
     text_pos_changed = true;
 
     //if we are beginning a new line set the state
-    if(0){
+//    if(0){
         cur_tx = state->getLineX(); 
-    }
+//    }
     cur_ty = state->getLineY(); 
     
 }
@@ -347,12 +347,11 @@ void HTMLRenderer::check_state_change(GfxState * state)
             {
                 double lhs1 = cur_text_tm[0] * cur_tx + cur_text_tm[2] * cur_ty + cur_text_tm[4] - old_tm[0] * draw_tx - old_tm[2] * draw_ty - old_tm[4];
                 double lhs2 = cur_text_tm[1] * cur_tx + cur_text_tm[3] * cur_ty + cur_text_tm[5] - old_tm[1] * draw_tx - old_tm[3] * draw_ty - old_tm[5];
-                /*
-                 * Now the equation system becomes
-                 *
-                 * lhs1 = OldTM[0] * dx + OldTM[2] * dy
-                 * lhs2 = OldTM[1] * dx + OldTM[3] * dy
-                 */
+                
+                 //* Now the equation system becomes
+                 //*
+                 //* lhs1 = OldTM[0] * dx + OldTM[2] * dy
+                 //* lhs2 = OldTM[1] * dx + OldTM[3] * dy
 
                 double inverted[4];
                 inverted[0] =  old_tm[3] / det;
@@ -534,6 +533,8 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
     {
         html_text_page.get_cur_line()->append_state(cur_text_state);
     }
+
+
 }
 
 } //namespace pdf2htmlEX
