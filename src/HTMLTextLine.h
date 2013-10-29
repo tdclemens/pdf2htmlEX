@@ -30,7 +30,7 @@ class HTMLTextLine
 public:
     //Added by Tyler Clemens.
     struct LetterState {
-        Unicode *letter;  //the characters
+        std::vector<Unicode> letter;  //the characters
         int length;       //the length of the characters
         double x, y;      //character position
         double dx, dy;    //character width and height

@@ -35,8 +35,10 @@ HTMLTextLine::HTMLTextLine (const HTMLLineState & line_state, const Param & para
 }
 
 HTMLTextLine::~HTMLTextLine(){
+/*
    for(std::list<LetterState>::iterator itr = letters.begin(); itr != letters.end(); itr++)
         delete[] itr->letter;
+        */
 }
 
 void HTMLTextLine::append_unicodes(const Unicode * u, int l)
@@ -76,9 +78,12 @@ void HTMLTextLine::append_state(const HTMLTextState & text_state)
 void HTMLTextLine::append_letter_state(Unicode *letter, int uLen, double x, double y, double dx, double dy, int index, double fs, double dts) 
 {
     letters.emplace_back();
+    letters.back().letter.insert(letters.back().letter.end(), letter, letter + uLen);
+    /*
     letters.back().letter = new Unicode[uLen];
     for(int i = 0; i < uLen; i++)
         (letters.back().letter)[i] = letter[i];
+        */
     letters.back().length = uLen;
     letters.back().x = x;
     letters.back().dx = dx;

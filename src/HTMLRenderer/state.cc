@@ -33,9 +33,9 @@ void HTMLRenderer::updateTextPos(GfxState * state)
     text_pos_changed = true;
 
     //if we are beginning a new line set the state
-//    if(0){
+    if(0){
         cur_tx = state->getLineX(); 
-//    }
+    }
     cur_ty = state->getLineY(); 
     
 }
