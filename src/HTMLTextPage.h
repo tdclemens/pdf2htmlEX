@@ -7,6 +7,7 @@
 #define HTMLTEXTPAGE_H__
 
 #include <vector>
+#include <list>
 #include <memory>
 #include <ostream>
 
@@ -47,7 +48,7 @@ private:
     HTMLTextLine * cur_line;
     double page_width, page_height;
 
-    std::vector<std::unique_ptr<HTMLTextLine>> text_lines;
+    std::list<std::unique_ptr<HTMLTextLine>> text_lines;
 
     struct Clip {
         HTMLClipState clip_state;
@@ -56,7 +57,7 @@ private:
             :clip_state(clip_state),start_idx(start_idx)
         { }
     };
-    std::vector<Clip> clips;
+    std::list<Clip> clips;
 };
 
 } //namespace pdf2htmlEX 
