@@ -126,10 +126,6 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
         double hs = state->getHorizScaling();
         double tx =  draw_tx + ((dx * cur_font_size + nChars * cur_letter_space + nSpaces * cur_word_space) * hs);
 
-        /*for(int i = 0; i < uLen; i++){
-            printf("%c",u[i]);
-        }
-        */
         if(uLen == 1){
             Unicode uu;
             if(cur_text_state.font_info->use_tounicode)

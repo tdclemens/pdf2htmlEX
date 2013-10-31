@@ -105,7 +105,6 @@ public:
         static const char * const css_class_names []; // class names for each id
 
         //Added by Tyler Clemens. A vector of letter states
-        //std::list<LetterState*> letters;
         std::list<LetterState*>::iterator first_letter, last_letter;
         //Added by Tyler Clemens. A vector of words
         std::list<WordState> words;
