@@ -41,10 +41,11 @@ public:
 
     //Added by Tyler Clemens
     struct WordState {
-        std::list<LetterState*> letters;
+        std::list<LetterState**> letters;
         double avgls;                       // average letter space >= 0. round negative values up to 0.
         double x, y;                        // the coordinates of the word
         double mcu_cs;                      // the most commonly used space between characters. Exclude negatives and 0
+        double als;                         // the average letter space
 
         void print(std::ostream &out);
     };

@@ -130,8 +130,6 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
             printf("%c",u[i]);
         }
         */
-        if(tx < 0)
-            printf("draw_tx: %f, tx: %f\n", draw_tx, tx);
         html_text_page.get_cur_line()->append_letter_state(u, uLen, tx, draw_ty + dy * hs, dx1, dy1, 0, cur_font_size, draw_text_scale);
 
         //Added By Tyler Clemens. A way to set the states letter state
