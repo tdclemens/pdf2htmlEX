@@ -30,7 +30,7 @@ class HTMLTextLine
 public:
     //Added by Tyler Clemens.
     struct LetterState {
-        std::vector<Unicode> letter;  //the characters
+        Unicode* letter;  //the characters
         int length;       //the length of the characters
         double x, y;      //character position
         double dx, dy;    //character width and height
@@ -41,7 +41,7 @@ public:
 
     //Added by Tyler Clemens
     struct WordState {
-        std::list<LetterState**> letters;
+        std::list<LetterState*>::iterator first_letter, last_letter;
         double avgls;                       // average letter space >= 0. round negative values up to 0.
         double x, y;                        // the coordinates of the word
         double mcu_cs;                      // the most commonly used space between characters. Exclude negatives and 0
@@ -54,6 +54,7 @@ public:
     ~HTMLTextLine();
 
     struct State : public HTMLTextState {
+        State();
         // before output
         void begin(std::ostream & out, const State * prev_state);
         // after output
@@ -64,8 +65,13 @@ public:
         int diff(const State & s) const;
 
         //Added by Tyler Clemens.
-        void append_letter_state(LetterState *letter){
-            letters.push_back(letter);
+        void append_letter_state(std::list<LetterState*>::iterator end){
+            std::list<LetterState*>::iterator last = end;
+            last--;
+            if(begining)
+                first_letter = last;
+            last_letter = last;
+            begining = false;
         }
         void set_mcu_cs();
         std::list<WordState>::iterator detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word);
@@ -96,13 +102,15 @@ public:
         static const char * const css_class_names []; // class names for each id
 
         //Added by Tyler Clemens. A vector of letter states
-        std::list<LetterState*> letters;
+        //std::list<LetterState*> letters;
+        std::list<LetterState*>::iterator first_letter, last_letter;
         //Added by Tyler Clemens. A vector of words
         std::list<WordState> words;
         double x, y;
         double dts;
         std::map<double, int> cses;
         double mcu_cs;                  // most commonly used letter space
+        bool begining;
     
     };
 
@@ -134,7 +142,7 @@ public:
      */
     void prepare(void);
     std::list<State> states;
-    std::list<LetterState> letters;
+    std::list<LetterState*> letters;
 private:
     void optimize(void);
 

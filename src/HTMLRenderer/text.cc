@@ -130,10 +130,23 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
             printf("%c",u[i]);
         }
         */
+        if(uLen == 1){
+            Unicode uu;
+            if(cur_text_state.font_info->use_tounicode)
+            {
+                uu = check_unicode(u, uLen, code, font);
+            }
+            else
+            {
+                uu = unicode_from_font(code, font);
+            }
+            u = &uu;
+        }
+
         html_text_page.get_cur_line()->append_letter_state(u, uLen, tx, draw_ty + dy * hs, dx1, dy1, 0, cur_font_size, draw_text_scale);
 
         //Added By Tyler Clemens. A way to set the states letter state
-        html_text_page.get_cur_line()->states.back().append_letter_state(&(html_text_page.get_cur_line()->letters.back()));
+        html_text_page.get_cur_line()->states.back().append_letter_state(html_text_page.get_cur_line()->letters.end());
 
         dx += dx1;
         dy += dy1;
