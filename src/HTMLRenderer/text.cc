@@ -50,8 +50,8 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
     char *p = s->getCString();
     int len = s->getLength();
 
-    double dx = 0;
-    double dy = 0;
+    double dx = 0.0;
+    double dy = 0.0;
     double dx1,dy1;
     double ox, oy;
 
@@ -61,7 +61,7 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
 
     CharCode code;
     Unicode *u = nullptr;
-
+    
     while (len > 0) 
     {
         auto n = font->getNextChar(p, len, &code, &u, &uLen, &dx1, &dy1, &ox, &oy);
@@ -122,13 +122,37 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
                 }
             }
         }
+        //Added By Tyler Clemens. A quick and dirty way to grab letter positions
+        double hs = state->getHorizScaling();
+        double tx =  draw_tx + ((dx * cur_font_size + nChars * cur_letter_space + nSpaces * cur_word_space) * hs);
+
+        if(uLen == 1){
+            Unicode uu;
+            if(cur_text_state.font_info->use_tounicode)
+            {
+                uu = check_unicode(u, uLen, code, font);
+            }
+            else
+            {
+                uu = unicode_from_font(code, font);
+            }
+            u = &uu;
+        }
+
+        html_text_page.get_cur_line()->append_letter_state(u, uLen, tx, draw_ty + dy * hs, dx1, dy1, 0, cur_font_size, draw_text_scale);
+
+        //Added By Tyler Clemens. A way to set the states letter state
+        html_text_page.get_cur_line()->states.back().append_letter_state(html_text_page.get_cur_line()->letters.end());
 
         dx += dx1;
         dy += dy1;
 
+
         ++nChars;
+
         p += n;
         len -= n;
+
     }
 
     double hs = state->getHorizScaling();
@@ -144,6 +168,8 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
         
     draw_tx += dx;
     draw_ty += dy;
+
+    cur_draw_tx += dx * draw_text_scale;
 }
 
 } // namespace pdf2htmlEX

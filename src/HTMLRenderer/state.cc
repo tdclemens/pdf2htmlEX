@@ -31,8 +31,13 @@ void HTMLRenderer::updateRise(GfxState * state)
 void HTMLRenderer::updateTextPos(GfxState * state) 
 {
     text_pos_changed = true;
-    cur_tx = state->getLineX(); 
+
+    //if we are beginning a new line set the state
+    if(0){
+        cur_tx = state->getLineX(); 
+    }
     cur_ty = state->getLineY(); 
+    
 }
 void HTMLRenderer::updateTextShift(GfxState * state, double shift) 
 {
@@ -126,6 +131,7 @@ void HTMLRenderer::reset_state()
 
     cur_tx  = cur_ty  = 0;
     draw_tx = draw_ty = 0;
+    cur_draw_tx = 0;
 
     reset_state_change();
     all_changed = true;
@@ -341,12 +347,11 @@ void HTMLRenderer::check_state_change(GfxState * state)
             {
                 double lhs1 = cur_text_tm[0] * cur_tx + cur_text_tm[2] * cur_ty + cur_text_tm[4] - old_tm[0] * draw_tx - old_tm[2] * draw_ty - old_tm[4];
                 double lhs2 = cur_text_tm[1] * cur_tx + cur_text_tm[3] * cur_ty + cur_text_tm[5] - old_tm[1] * draw_tx - old_tm[3] * draw_ty - old_tm[5];
-                /*
-                 * Now the equation system becomes
-                 *
-                 * lhs1 = OldTM[0] * dx + OldTM[2] * dy
-                 * lhs2 = OldTM[1] * dx + OldTM[3] * dy
-                 */
+                
+                 //* Now the equation system becomes
+                 //*
+                 //* lhs1 = OldTM[0] * dx + OldTM[2] * dy
+                 //* lhs2 = OldTM[1] * dx + OldTM[3] * dy
 
                 double inverted[4];
                 inverted[0] =  old_tm[3] / det;
@@ -415,6 +420,7 @@ void HTMLRenderer::check_state_change(GfxState * state)
         double new_letter_space = state->getCharSpace() * draw_text_scale;
         if(!equal(new_letter_space, cur_text_state.letter_space))
         {
+            //TODO: This is buggy. Fix it. the letter space is sometimes off
             cur_text_state.letter_space = new_letter_space;
             set_line_state(new_line_state, NLS_NEWSTATE);
         }
@@ -505,6 +511,9 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
         cur_text_state.vertical_align = 0;
 
         //resync position
+        cur_tx = state->getLineX();
+        cur_ty = state->getLineY();
+        cur_draw_tx = cur_tx * draw_text_scale;
         draw_ty = cur_ty;
         draw_tx = cur_tx;
     }
@@ -517,6 +526,7 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
         {
             html_text_page.get_cur_line()->append_offset(target);
             draw_tx += target / draw_text_scale;
+            cur_draw_tx += target;
         }
     }
 
@@ -524,6 +534,8 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
     {
         html_text_page.get_cur_line()->append_state(cur_text_state);
     }
+
+
 }
 
 } //namespace pdf2htmlEX

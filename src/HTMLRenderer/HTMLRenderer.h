@@ -337,6 +337,9 @@ protected:
     std::string cur_page_filename;
 
     static const std::string MANIFEST_FILENAME;
+
+    //Added By Tyler. a counter for the x position of text on a line with scaling.
+    double cur_draw_tx;
 };
 
 } //namespace pdf2htmlEX

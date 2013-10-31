@@ -9,6 +9,7 @@
 
 namespace pdf2htmlEX {
 
+
 struct FontInfo
 {
     long long id;
@@ -41,7 +42,7 @@ struct HTMLTextState
     Color stroke_color;
     double letter_space;
     double word_space;
-    
+
     // relative to the previous state
     double vertical_align;
     
@@ -56,6 +57,8 @@ struct HTMLTextState
     double em_size(void) const {
         return font_size * (font_info->ascent - font_info->descent);
     }
+
+
 };
 
 struct HTMLLineState

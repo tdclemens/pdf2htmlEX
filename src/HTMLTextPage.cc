@@ -43,7 +43,9 @@ void HTMLTextPage::dump_text(ostream & out)
     auto text_line_iter = text_lines.begin();
     for(auto clip_iter = clips.begin(); clip_iter != clips.end(); ++clip_iter)
     {
-        auto next_text_line_iter = text_lines.begin() + clip_iter->start_idx;
+        auto next_text_line_iter = text_lines.begin(); // + clip_iter->start_idx;
+        for(int i = 0; i < clip_iter->start_idx; i++)
+            next_text_line_iter++;
         if(text_line_iter != next_text_line_iter)
         {
             const auto & cs = cur_clip.clip_state;
