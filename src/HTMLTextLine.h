@@ -37,6 +37,8 @@ public:
         int index;        //the index of the character on its line
         double fs;        //Font Size
         double dts;       //Draw Text Scale
+
+        bool check_for_word_delim();
     };
 
     //Added by Tyler Clemens
@@ -48,6 +50,7 @@ public:
         double als;                         // the average letter space
 
         void print(std::ostream &out);
+        void set_ls();
     };
 
     HTMLTextLine (const HTMLLineState & line_state, const Param & param, AllStateManager & all_manager);

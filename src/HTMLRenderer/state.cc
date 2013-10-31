@@ -420,6 +420,7 @@ void HTMLRenderer::check_state_change(GfxState * state)
         double new_letter_space = state->getCharSpace() * draw_text_scale;
         if(!equal(new_letter_space, cur_text_state.letter_space))
         {
+            //TODO: This is buggy. Fix it. the letter space is sometimes off
             cur_text_state.letter_space = new_letter_space;
             set_line_state(new_line_state, NLS_NEWSTATE);
         }

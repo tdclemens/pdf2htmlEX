@@ -152,8 +152,18 @@ void HTMLTextLine::dump_text(ostream & out){
     //for each state, try to guess where there is a space and insert new words
     std::list<WordState>::iterator cur_word;
     for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++){
-//            cur_state->detect_spaces_and_split(cur_state->words.begin(),cur_state->words.begin());
+            cur_state->detect_spaces_and_split(cur_state->words.begin(),cur_state->words.begin());
     }
+
+    for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++)
+        for(std::list<WordState>::iterator word = cur_state->words.begin(); word != cur_state->words.end(); word++){
+            word->set_ls();
+            // if the state letter spacing is noticably large use it
+            // since negative letter spacing is used to adjust for kerning
+            // and causes letters to run into each other dont use it.
+            if(cur_state->letter_space > 1)
+                word->als = cur_state->letter_space;
+        }
     
     // do some of the original stuff
     if(states.empty() || (states.front().start_idx != 0))
@@ -200,45 +210,53 @@ void HTMLTextLine::make_words(std::list<State>::iterator cur_state){
     bool begining = true;
     for(std::list<LetterState*>::iterator cur_letter = cur_state->first_letter; cur_letter != end_last_letter; cur_letter++){
         cur_state->words.back().last_letter = cur_letter;
-        if(!begining)
-            cur_state->words.back().als += (*cur_letter)->x - (*prev_letter)->x - (*prev_letter)->dx * (*prev_letter)->dts;
         //search the letter string for a space
-        bool found = false;
-        for(int i = 0; i < (*cur_letter)->length; i++)
-            //if(((*cur_letter)->letter)[i] == ' ')
-            if(((*cur_letter)->letter)[i] == ' ' || ((*cur_letter)->letter)[i] == ',' || ((*cur_letter)->letter)[i] == '.' || ((*cur_letter)->letter)[i] == ';' || ((*cur_letter)->letter)[i] == ':')
-                found = true;
+        bool found = (*cur_letter)->check_for_word_delim();
         //if you find a space create a new word
         if(found){
-            cur_state->words.back().als = cur_state->words.back().als /( ct - 1);
+            cur_state->words.back().als = cur_state->words.back().als /(ct - 1);
             ct = 0;
             copy = cur_letter;
             copy++;
-            cur_state->words.emplace_back();
             if(copy != end_last_letter){
+                cur_state->words.emplace_back();
                 cur_state->words.back().x = (*copy)->x;
                 cur_state->words.back().first_letter = copy;
+                cur_state->words.back().last_letter = copy;
             }
             else{
-                cur_state->words.back().x = (*cur_letter)->x;
-                cur_state->words.back().first_letter = cur_state->words.back().last_letter = cur_letter;
+            //    cur_state->words.back().x = (*cur_letter)->x;
+            //    cur_state->words.back().first_letter = cur_state->words.back().last_letter = cur_letter;
             }
             //prev_letter = cur_state->letters.begin();
             cur_state->words.back().als = 0;
+            begining = true;
         }
         else{
+            if(!begining)
+                cur_state->words.back().als += (*cur_letter)->x - (*prev_letter)->x - (*prev_letter)->dx * (*prev_letter)->dts;
             ct++;
             prev_letter = cur_letter;
+            begining = false;
       }
-      begining = false;
     }
+}
+
+bool HTMLTextLine::LetterState::check_for_word_delim(){
+    bool found = false;
+    for(int i = 0; i < length; i++)
+        if(letter[i] == ' ' || letter[i] == ',' || letter[i] == '.' || letter[i] == ';' || letter[i] == ':'){
+            found = true;
+            break;
+        }
+    return found;
 }
 
 void HTMLTextLine::State::set_mcu_cs(){
     std::list<LetterState*>::iterator cur_letter, next_letter;
     std::list<LetterState*>::iterator endItr;
     for(std::list<WordState>::iterator cur_word = words.begin(); cur_word != words.end(); cur_word++){
-        endItr = cur_word->last_letter;;
+        endItr = cur_word->last_letter;
         //endItr--;
         //TODO: change this algorithm to a more efficient one. This is a brute force method
         if(std::distance(cur_word->first_letter, cur_word->last_letter) > 1)
@@ -261,6 +279,42 @@ void HTMLTextLine::State::set_mcu_cs(){
     }
     //printf("state mcu_cs: %f\n", mcu_cs);
 
+}
+
+void HTMLTextLine::WordState::set_ls(){
+    std::list<LetterState*>::iterator end = last_letter;
+    end++;
+    int wlength;
+    wlength = std::distance(first_letter, last_letter);
+    std::list<LetterState*>::iterator itr = first_letter;
+    if(wlength == 2){
+        itr++;
+        als = (*itr)->x - (*first_letter)->x -((*first_letter)->dx * (*first_letter)->dts);
+    }
+    else if(wlength >= 3){
+        als = 0;
+        int ct = 0;
+        bool found = false;
+        std::list<LetterState*>::iterator next_letter = itr;
+        next_letter++;
+        for(;itr != end; itr++, next_letter++){
+            for(int i = 0; i < (*next_letter)->length; i++){
+                if(((*next_letter)->letter)[i] == ' '){
+                    found = true;
+                    break;
+                }
+            }
+            if(!found){
+                als *= (*next_letter)->x - (*itr)->x -((*itr)->dx * (*itr)->dts);
+                ct++;
+            }
+        }
+        als = als / (ct-1);
+    }
+    else // wlength = 1 or 0
+        als = 0;
+    if(als == 0 || als == -0.0)
+        als = -1;
 }
 
 std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word){
@@ -286,6 +340,7 @@ std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_
                 newWord.first_letter = next_letter;
                 for(std::list<LetterState*>::iterator itr = next_letter; itr != end_last_letter; itr++)
                     newWord.last_letter = itr;
+                word->last_letter = cur_letter;
                 //word->letters.erase(next_letter, word->letters.end());
                 //insert the new word before the next word
                 words.insert(copy, newWord);
@@ -555,7 +610,6 @@ void HTMLTextLine::State::begin (ostream & out, const State * prev_state)
                         font_size = prev_state->font_size;
                         break;
                     case LETTER_SPACE_ID:
-                        letter_space = prev_state->letter_space;
                         break;
                     case WORD_SPACE_ID:
                         word_space = prev_state->word_space;
@@ -699,7 +753,7 @@ HTMLTextLine::State::State(){
 void HTMLTextLine::WordState::print(std::ostream &out){
   std::list<LetterState*>::iterator backItr = last_letter;
   last_letter++;
-  out << "<span style='position:absolute;bottom:0px;left:"<<x<<"px;letter-spacing:"<<"0"<<"px;line-height:50%;'>";
+  out << "<span style='position:absolute;bottom:0px;left:"<<x<<"px;letter-spacing:"<<als<<"px;line-height:50%;'>";
   for(std::list<LetterState*>::iterator itr = first_letter; itr != last_letter; itr++){
       for(int i = 0; i < (*itr)->length; i++){
           outputUnicodes(out, &(((*itr)->letter)[i]), 1);
