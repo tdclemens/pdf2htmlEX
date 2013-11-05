@@ -6,8 +6,10 @@
 #define HTMLTEXTLINE_H__
 
 #include <ostream>
+#include <fstream>
 #include <vector>
 #include <list>
+#include <ctype.h>
 
 #include <CharTypes.h>
 
@@ -16,6 +18,31 @@
 #include "HTMLState.h"
 
 namespace pdf2htmlEX {
+    class EnglishDictionary{
+
+        public:
+            static EnglishDictionary& getInstance(){
+                static EnglishDictionary instance;
+                return instance;
+            };
+            bool is_word(std::string const& word) const {
+                return _hash.count(word);
+            }
+
+        private:
+            EnglishDictionary(){
+                std::ifstream input ("/usr/share/dict/words");
+                for(std::string line; getline(input, line);){
+                    std::string lower;
+                    for(int i = 0; line[i]; i++)
+                        lower += tolower(line[i]);
+                    _hash.insert(lower);
+                }
+            };
+            EnglishDictionary(EnglishDictionary const & ed);
+            void operator=(EnglishDictionary const & ed);
+            std::set<std::string> _hash;
+    };
 
 /*
  * Store and optimize a line of text in HTML
@@ -51,6 +78,7 @@ public:
 
         void print(std::ostream &out);
         void set_ls();
+        std::string to_s();
     };
 
     HTMLTextLine (const HTMLLineState & line_state, const Param & param, AllStateManager & all_manager);
@@ -77,7 +105,7 @@ public:
             begining = false;
         }
         void set_mcu_cs();
-        std::list<WordState>::iterator detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word);
+        std::list<WordState>::iterator detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word, EnglishDictionary& dictionary);
 
         enum {
             FONT_ID,
@@ -145,6 +173,7 @@ public:
     void prepare(void);
     std::list<State> states;
     std::list<LetterState*> letters;
+    static EnglishDictionary& dictionary;
 private:
     void optimize(void);
 

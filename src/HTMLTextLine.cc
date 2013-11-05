@@ -15,6 +15,7 @@
 #include "util/css_const.h"
 
 namespace pdf2htmlEX {
+    EnglishDictionary& HTMLTextLine::dictionary = EnglishDictionary::getInstance();
 
 using std::min;
 using std::max;
@@ -93,6 +94,7 @@ void HTMLTextLine::append_letter_state(Unicode *letter, int uLen, double x, doub
 
 void HTMLTextLine::dump_text(ostream & out){
 
+
     //set the values of x for all letters
     {
       std::list<LetterState*>::iterator cur_letter, next_letter;
@@ -117,6 +119,11 @@ void HTMLTextLine::dump_text(ostream & out){
           make_words(cur_state);
       }
     }
+    /*
+    for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++)
+        for(std::list<WordState>::iterator word = cur_state->words.begin(); word != cur_state->words.end(); word++)
+            std::cout << word->to_s() << ";\n";
+    */
 
     //set the most common character space of each state
     for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++)
@@ -125,7 +132,7 @@ void HTMLTextLine::dump_text(ostream & out){
     //for each state, try to guess where there is a space and insert new words
     std::list<WordState>::iterator cur_word;
     for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++){
-            cur_state->detect_spaces_and_split(cur_state->words.begin(),cur_state->words.begin());
+            cur_state->detect_spaces_and_split(cur_state->words.begin(),cur_state->words.begin(), dictionary);
     }
 
     for(std::list<State>::iterator cur_state = states.begin(); cur_state != states.end(); cur_state++)
@@ -289,17 +296,29 @@ void HTMLTextLine::WordState::set_ls(){
 }
 
 /* detects spaces and chops them out into new words */
-std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word){
+std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_and_split(std::list<WordState>::iterator beginWord, std::list<WordState>::iterator word, EnglishDictionary& dictionary){
     // end case for recursion
     if(word == words.end())
         return word;
-
     std::list<LetterState*>::iterator cur_letter, next_letter, end_last_letter;
     std::list<WordState>::iterator copy = word;
     copy++;
     WordState newWord;
     end_last_letter = word->last_letter;
     end_last_letter++;
+    std::list<WordState>::iterator last_word = words.end();
+    if(words.end() != words.begin())
+        last_word--;
+    
+    //another end case. if its a word, skip it. If its the last word end the recursion.
+    if(dictionary.is_word(word->to_s())){
+        if(word == last_word)
+            return word;
+        else
+            return detect_spaces_and_split(beginWord, copy, dictionary);
+    }
+
+
     if(std::distance(word->first_letter, word->last_letter) > 1){
         for(cur_letter = word->first_letter,next_letter = cur_letter, next_letter++; next_letter != end_last_letter; cur_letter++, next_letter++){
             double cs = (*next_letter)->x - (*cur_letter)->x - ((*cur_letter)->dx * (*cur_letter)->dts);
@@ -318,10 +337,23 @@ std::list<HTMLTextLine::WordState>::iterator HTMLTextLine::State::detect_spaces_
         }
         copy = word;
         copy++;
-        return detect_spaces_and_split(beginWord, copy);
+        return detect_spaces_and_split(beginWord, copy, dictionary);
     }
     else
       return word;
+}
+
+std::string HTMLTextLine::WordState::to_s(){
+    std::string str;
+    std::list<LetterState*>::iterator end = last_letter;
+    if(last_letter != first_letter){
+        end++;
+        for(std::list<LetterState*>::iterator itr = first_letter; itr != end; itr++)
+            for(int i = 0; i < (*itr)->length; i++)
+                if(!(*itr)->check_for_word_delim())
+                    str += tolower((*(*itr)->letter));
+    }
+    return str;
 }
 
 void HTMLTextLine::clear(void)
