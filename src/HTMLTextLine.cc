@@ -141,7 +141,10 @@ void HTMLTextLine::dump_text(ostream & out){
             // if the state letter spacing is noticably large use it
             // since negative letter spacing is used to adjust for kerning
             // and causes letters to run into each other dont use it.
-            if(cur_state->letter_space > 1)
+            //if(cur_state->letter_space > -1 && cur_state->letter_space != 0)
+            if(cur_state->letter_space == 0)
+                word->als = -0.5;
+            else
                 word->als = cur_state->letter_space;
         }
     
