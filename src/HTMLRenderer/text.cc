@@ -91,6 +91,7 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
         {
             // ignore horiz_scaling, as it's merged in CTM
             html_text_page.get_cur_line()->append_offset((dx1 * cur_font_size + cur_letter_space + cur_word_space) * draw_text_scale); 
+            new_draw_tx += (dx1 * cur_font_size + cur_letter_space + cur_word_space);
         }
         else
         {
@@ -119,12 +120,13 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
                 if(space_count != 0)
                 {
                     html_text_page.get_cur_line()->append_offset(cur_word_space * draw_text_scale * space_count);
+                    new_draw_tx += cur_word_space * space_count;
                 }
             }
         }
         //Added By Tyler Clemens. A quick and dirty way to grab letter positions
         double hs = state->getHorizScaling();
-        double tx =  draw_tx + ((dx * cur_font_size + nChars * cur_letter_space + nSpaces * cur_word_space) * hs);
+        double tx =  new_draw_tx + ((dx * cur_font_size + nChars * cur_letter_space + nSpaces * cur_word_space) * hs);
 
         if(uLen == 1){
             Unicode uu;
@@ -169,7 +171,8 @@ void HTMLRenderer::drawString(GfxState * state, GooString * s)
     draw_tx += dx;
     draw_ty += dy;
 
-    cur_draw_tx += dx * draw_text_scale;
+    new_cur_tx += dx;
+    new_draw_tx += dx;
 }
 
 } // namespace pdf2htmlEX

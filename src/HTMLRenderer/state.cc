@@ -32,10 +32,7 @@ void HTMLRenderer::updateTextPos(GfxState * state)
 {
     text_pos_changed = true;
 
-    //if we are beginning a new line set the state
-    if(0){
-        cur_tx = state->getLineX(); 
-    }
+    cur_tx = state->getLineX(); 
     cur_ty = state->getLineY(); 
     
 }
@@ -43,6 +40,7 @@ void HTMLRenderer::updateTextShift(GfxState * state, double shift)
 {
     text_pos_changed = true;
     cur_tx -= shift * 0.001 * state->getFontSize() * state->getHorizScaling(); 
+    new_cur_tx -= shift * 0.001 * state->getFontSize() * state->getHorizScaling(); 
 }
 void HTMLRenderer::updateFont(GfxState * state) 
 {
@@ -130,8 +128,9 @@ void HTMLRenderer::reset_state()
     cur_clip_state.ymax = 0;
 
     cur_tx  = cur_ty  = 0;
+    new_cur_tx = 0;
     draw_tx = draw_ty = 0;
-    cur_draw_tx = 0;
+    new_draw_tx = 0;
 
     reset_state_change();
     all_changed = true;
@@ -266,12 +265,12 @@ void HTMLRenderer::check_state_change(GfxState * state)
     // depends: font size & ctm & text_ctm & hori scale
     if(need_rescale_font)
     {
-        /*
-         * Rescale the font
-         * If the font-size is 1, and the matrix is [10,0,0,10,0,0], we would like to change it to
-         * font-size == 10 and matrix == [1,0,0,1,0,0], 
-         * such that it will be easy and natrual for web browsers
-         */
+       // 
+       //  * Rescale the font
+       //  * If the font-size is 1, and the matrix is [10,0,0,10,0,0], we would like to change it to
+       //  * font-size == 10 and matrix == [1,0,0,1,0,0], 
+       //  * such that it will be easy and natrual for web browsers
+
         double new_draw_text_tm[6];
         memcpy(new_draw_text_tm, cur_text_tm, sizeof(new_draw_text_tm));
 
@@ -327,15 +326,15 @@ void HTMLRenderer::check_state_change(GfxState * state)
     {
         // TM[4] and/or TM[5] have been changed
         // To find an offset (dx,dy), which would cancel the effect
-        /*
-         * CurTM * (cur_tx, cur_ty, 1)^T = OldTM * (draw_tx + dx, draw_ty + dy, 1)^T
-         *
-         * the first 4 elements of CurTM and OldTM should be the proportional
-         * otherwise the following text cannot be parallel
-         *
-         * NOTE:
-         * dx,dy are handled by the old state. so they should be multiplied by old_draw_text_scale
-         */
+        // *
+        // * CurTM * (cur_tx, cur_ty, 1)^T = OldTM * (draw_tx + dx, draw_ty + dy, 1)^T
+        // *
+        // * the first 4 elements of CurTM and OldTM should be the proportional
+        // * otherwise the following text cannot be parallel
+        // *
+        // * NOTE:
+        // * dx,dy are handled by the old state. so they should be multiplied by old_draw_text_scale
+
 
         bool merged = false;
         double dx = 0;
@@ -348,10 +347,10 @@ void HTMLRenderer::check_state_change(GfxState * state)
                 double lhs1 = cur_text_tm[0] * cur_tx + cur_text_tm[2] * cur_ty + cur_text_tm[4] - old_tm[0] * draw_tx - old_tm[2] * draw_ty - old_tm[4];
                 double lhs2 = cur_text_tm[1] * cur_tx + cur_text_tm[3] * cur_ty + cur_text_tm[5] - old_tm[1] * draw_tx - old_tm[3] * draw_ty - old_tm[5];
                 
-                 //* Now the equation system becomes
-                 //*
-                 //* lhs1 = OldTM[0] * dx + OldTM[2] * dy
-                 //* lhs2 = OldTM[1] * dx + OldTM[3] * dy
+                 // Now the equation system becomes
+                 //
+                 // lhs1 = OldTM[0] * dx + OldTM[2] * dy
+                 // lhs2 = OldTM[1] * dx + OldTM[3] * dy
 
                 double inverted[4];
                 inverted[0] =  old_tm[3] / det;
@@ -400,6 +399,8 @@ void HTMLRenderer::check_state_change(GfxState * state)
                 set_line_state(new_line_state, NLS_NEWSTATE);
             }
             draw_tx = cur_tx;
+            new_cur_tx += dx;
+            new_draw_tx += dx;
             draw_ty = cur_ty;
         }
         else
@@ -511,11 +512,10 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
         cur_text_state.vertical_align = 0;
 
         //resync position
-        cur_tx = state->getLineX();
-        cur_ty = state->getLineY();
-        cur_draw_tx = cur_tx * draw_text_scale;
+        new_cur_tx = state->getLineX();
         draw_ty = cur_ty;
         draw_tx = cur_tx;
+        new_draw_tx = new_cur_tx;
     }
     else
     {
@@ -526,7 +526,7 @@ void HTMLRenderer::prepare_text_line(GfxState * state)
         {
             html_text_page.get_cur_line()->append_offset(target);
             draw_tx += target / draw_text_scale;
-            cur_draw_tx += target;
+            new_draw_tx += target / draw_text_scale;
         }
     }
 

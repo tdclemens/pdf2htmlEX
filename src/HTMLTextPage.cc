@@ -21,6 +21,10 @@ HTMLTextPage::HTMLTextPage(const Param & param, AllStateManager & all_manager)
     , page_width(0)
     , page_height(0)
 { } 
+HTMLTextPage::~HTMLTextPage(){
+    for(std::list<HTMLTextLine*>::iterator itr = text_lines.begin(); itr != text_lines.end(); itr++)
+        delete *itr;
+}
 
 void HTMLTextPage::dump_text(ostream & out)
 {
@@ -100,7 +104,7 @@ void HTMLTextPage::open_new_line(const HTMLLineState & line_state)
     // do not reused the last text_line even if it's empty
     // because the clip states may point to the next index
     text_lines.emplace_back(new HTMLTextLine(line_state, param, all_manager));
-    cur_line = text_lines.back().get();
+    cur_line = text_lines.back();
 }
 
 void HTMLTextPage::set_page_size(double width, double height)

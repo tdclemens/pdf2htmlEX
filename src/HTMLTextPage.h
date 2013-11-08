@@ -27,6 +27,7 @@ class HTMLTextPage
 {
 public:
     HTMLTextPage (const Param & param, AllStateManager & all_manager);
+    ~HTMLTextPage();
 
     HTMLTextLine * get_cur_line(void) const { return cur_line; }
 
@@ -48,7 +49,7 @@ private:
     HTMLTextLine * cur_line;
     double page_width, page_height;
 
-    std::list<std::unique_ptr<HTMLTextLine>> text_lines;
+    std::list<HTMLTextLine*> text_lines;
 
     struct Clip {
         HTMLClipState clip_state;

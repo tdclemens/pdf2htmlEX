@@ -99,14 +99,23 @@ void HTMLTextLine::dump_text(ostream & out){
     {
       std::list<LetterState*>::iterator cur_letter, next_letter;
       double prevx = (*letters.begin())->x;
-      (*(letters.begin()))->x = 0;
+      //(*(letters.begin()))->x = 0;
+      (*(letters.begin()))->x = prevx;
       cur_letter = letters.begin();
       next_letter = letters.begin();
       next_letter++;
+      /*for(int i = 0; i < (*cur_letter)->length; i++)
+        printf("%c",(*cur_letter)->letter[i]);
+      printf(": %f\n",(*cur_letter)->x);
+      */
       for(; next_letter != letters.end(); cur_letter++, next_letter++){
           double x  = ((*next_letter)->x - prevx) * (*cur_letter)->dts;
           prevx = (*next_letter)->x;
           (*next_letter)->x = (*cur_letter)->x + x;
+          /*for(int i = 0; i < (*next_letter)->length; i++)
+            printf("c:%c",(*next_letter)->letter[i]);
+          printf(": %f\n",(*next_letter)->x);
+          */
       }
       //set the first state on the line to have the right x coordinate
       states.front().x = (*states.front().first_letter)->x;
